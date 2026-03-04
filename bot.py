@@ -1,9 +1,9 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/bot.py b/bot.py
-index cb041729803454f6b270afc4fe4b6f346d2b5c63..7ccbc6d81394bd5f36888fdaa0019277a1b88542 100644
+index cb041729803454f6b270afc4fe4b6f346d2b5c63..659a33b840b12c9dc8d39974abf194d4d49ddeda 100644
 --- a/bot.py
 +++ b/bot.py
-@@ -2,87 +2,91 @@
+@@ -2,87 +2,92 @@
  Telegram Bot — генерация изображений и видео.
  
  Сервисы:
@@ -39,6 +39,7 @@ index cb041729803454f6b270afc4fe4b6f346d2b5c63..7ccbc6d81394bd5f36888fdaa0019277
  TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN",   "")
  GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY",   "")
  SEEDANCE_API_KEY = os.environ.get("SEEDANCE_API_KEY", "")
++HF_TOKEN        = os.environ.get("HF_TOKEN", "")
  
  # ─── Pollinations.AI — БЕЗ ключа, полностью бесплатно ────────────
  # Документация: https://pollinations.ai
@@ -95,7 +96,7 @@ index cb041729803454f6b270afc4fe4b6f346d2b5c63..7ccbc6d81394bd5f36888fdaa0019277
      """Gemini Flash — запасной вариант, нужен бесплатный ключ."""
      if not GEMINI_API_KEY:
          return None
-@@ -152,50 +156,65 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+@@ -152,50 +157,65 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
      ]]
      await update.message.reply_text(
          "👋 *AI Медиа Генератор*\n\n"
@@ -161,7 +162,7 @@ index cb041729803454f6b270afc4fe4b6f346d2b5c63..7ccbc6d81394bd5f36888fdaa0019277
      txt = "🖼 *Выбери модель:*\n\n_Первые 5 — полностью бесплатно, без ключей_"
      if hasattr(target, "edit_message_text"):
          await target.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-@@ -285,68 +304,83 @@ async def do_video(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+@@ -285,68 +305,93 @@ async def do_video(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
      ]]
      if video_url:
          await update.message.reply_text(
@@ -212,6 +213,16 @@ index cb041729803454f6b270afc4fe4b6f346d2b5c63..7ccbc6d81394bd5f36888fdaa0019277
      if not TELEGRAM_TOKEN:
          raise RuntimeError("❌ Переменная TELEGRAM_TOKEN не задана!")
  
++    logger.info(
++        "🔐 Переменные окружения: TELEGRAM_TOKEN=%s, GEMINI_API_KEY=%s, SEEDANCE_API_KEY=%s, HF_TOKEN=%s",
++        "ok" if TELEGRAM_TOKEN else "missing",
++        "ok" if GEMINI_API_KEY else "missing",
++        "ok" if SEEDANCE_API_KEY else "missing",
++        "ok" if HF_TOKEN else "missing",
++    )
++    if HF_TOKEN:
++        logger.info("ℹ️ HF_TOKEN задан, но в текущей версии bot.py не используется.")
++
      app = Application.builder().token(TELEGRAM_TOKEN).build()
  
      conv = ConversationHandler(
