@@ -1,0 +1,15 @@
+services:
+  - type: worker
+    name: tg-media-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: SEEDANCE_API_KEY
+        sync: false
