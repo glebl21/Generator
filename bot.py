@@ -29,8 +29,8 @@ SEEDANCE_API_KEY = os.environ.get("SEEDANCE_API_KEY", "")
 #  Рабочие API endpoint'ы (март 2025)
 # ─────────────────────────────────────────────
 
-# Gemini Imagen 3 — стабильный, без 429
-GEMINI_IMAGEN_URL = "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict"
+# Gemini 2.0 Flash — бесплатный, поддерживает генерацию изображений
+GEMINI_IMAGEN_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent"
 
 # HuggingFace — только модели с активным Inference API (не 410)
 HF_MODELS = {
@@ -57,17 +57,19 @@ logger = logging.getLogger(__name__)
 # ════════════════════════════════════════════
 
 def gen_imagen3(prompt: str) -> bytes | None:
-    """Google Imagen 3 — стабильный, ~10 сек."""
+    """Gemini 2.0 Flash Image Generation — бесплатный."""
     url = f"{GEMINI_IMAGEN_URL}?key={GEMINI_API_KEY}"
     payload = {
-        "instances": [{"prompt": prompt}],
-        "parameters": {"sampleCount": 1}
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
     }
     try:
         r = requests.post(url, json=payload, timeout=60)
         r.raise_for_status()
-        b64 = r.json()["predictions"][0]["bytesBase64Encoded"]
-        return base64.b64decode(b64)
+        parts = r.json()["candidates"][0]["content"]["parts"]
+        for part in parts:
+            if "inlineData" in part:
+                return base64.b64decode(part["inlineData"]["data"])
     except Exception as e:
         logger.error(f"Imagen3: {e}")
     return None
