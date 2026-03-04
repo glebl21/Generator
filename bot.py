@@ -1,9 +1,9 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/bot.py b/bot.py
-index cb041729803454f6b270afc4fe4b6f346d2b5c63..98f62115c4e8a766c42a74d91962d4c1c529186c 100644
+index cb041729803454f6b270afc4fe4b6f346d2b5c63..7ccbc6d81394bd5f36888fdaa0019277a1b88542 100644
 --- a/bot.py
 +++ b/bot.py
-@@ -2,50 +2,51 @@
+@@ -2,87 +2,91 @@
  Telegram Bot — генерация изображений и видео.
  
  Сервисы:
@@ -55,7 +55,47 @@ index cb041729803454f6b270afc4fe4b6f346d2b5c63..98f62115c4e8a766c42a74d91962d4c1
  # ─── Gemini — запасной ────────────────────────────────────────────
  GEMINI_URL = (
      "https://generativelanguage.googleapis.com/v1beta/models/"
-@@ -152,50 +153,65 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+     "gemini-2.0-flash-exp-image-generation:generateContent"
+ )
+ 
+ # ─── Seedance — видео ─────────────────────────────────────────────
+ SEEDANCE_URL    = "https://api.seedanceapi.org/v1/video/text2video"
+ SEEDANCE_STATUS = "https://api.seedanceapi.org/v1/video/task/"
+ 
+ CHOOSING_MODE, CHOOSING_IMAGE_MODEL, WAITING_PROMPT, WAITING_VIDEO_PROMPT = range(4)
+ 
+ logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
+ logger = logging.getLogger(__name__)
+ 
++CONFLICT_LOG_COOLDOWN_SEC = 30
++_last_conflict_log_at = 0.0
++
+ 
+ # ════════════════════════════════════════════
+ #  ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ
+ # ════════════════════════════════════════════
+ 
+ def gen_pollinations(prompt: str, model: str = "flux") -> bytes | None:
+     """
+     Pollinations.AI — бесплатно, без ключа, без лимитов регистрации.
+     Возвращает сырые байты JPEG.
+     """
+     encoded = quote(prompt)
+     url = f"{POLLINATIONS_BASE}/{encoded}?model={model}&width=1024&height=1024&nologo=true"
+     try:
+         r = requests.get(url, timeout=60)
+         r.raise_for_status()
+         return r.content
+     except Exception as e:
+         logger.error(f"Pollinations ({model}): {e}")
+     return None
+ 
+ 
+ def gen_gemini(prompt: str) -> bytes | None:
+     """Gemini Flash — запасной вариант, нужен бесплатный ключ."""
+     if not GEMINI_API_KEY:
+         return None
+@@ -152,50 +156,65 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
      ]]
      await update.message.reply_text(
          "👋 *AI Медиа Генератор*\n\n"
@@ -121,7 +161,7 @@ index cb041729803454f6b270afc4fe4b6f346d2b5c63..98f62115c4e8a766c42a74d91962d4c1
      txt = "🖼 *Выбери модель:*\n\n_Первые 5 — полностью бесплатно, без ключей_"
      if hasattr(target, "edit_message_text"):
          await target.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-@@ -285,68 +301,80 @@ async def do_video(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+@@ -285,68 +304,83 @@ async def do_video(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
      ]]
      if video_url:
          await update.message.reply_text(
@@ -148,16 +188,19 @@ index cb041729803454f6b270afc4fe4b6f346d2b5c63..98f62115c4e8a766c42a74d91962d4c1
  
  
 +async def on_error(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
++    global _last_conflict_log_at
++
 +    err = ctx.error
 +    if isinstance(err, Conflict):
-+        logger.warning(
-+            "⚠️ Конфликт Telegram getUpdates: вероятно запущен второй инстанс бота. "
-+            "Останавливаю polling для текущего процесса."
-+        )
-+        if ctx.application.updater:
-+            await ctx.application.updater.stop()
-+        await ctx.application.stop()
++        now = time.monotonic()
++        if now - _last_conflict_log_at >= CONFLICT_LOG_COOLDOWN_SEC:
++            _last_conflict_log_at = now
++            logger.warning(
++                "⚠️ Конфликт Telegram getUpdates: вероятно запущен второй инстанс бота. "
++                "Текущий процесс продолжит polling и попробует снова."
++            )
 +        return
++
 +    logger.exception("Необработанная ошибка", exc_info=err)
 +
 +
